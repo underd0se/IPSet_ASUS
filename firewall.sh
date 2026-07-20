@@ -3228,7 +3228,7 @@ Load_Menu() {
 					printf '%-35s | %-40s\n' "[16] --> CDN Whitelisting" "$(if Is_Enabled "$cdnwhitelist"; then Grn "[Enabled]"; else Red "[Disabled]"; fi)"
 					printf '%-35s | %-40s\n' "[17] --> Display WebUI" "$(if Is_Enabled "$displaywebui"; then Grn "[Enabled]"; else Ylow "[Disabled]"; fi)"
 					if grep -q "vm/swappiness # SkyNet-SF" /jffs/scripts/firewall-start 2>/dev/null; then
-						swapmode_status="$(Grn "[Swap-Free]")"
+						swapmode_status="$(Grn "[Zero Swap]")"
 					elif grep -qE "swapon .* # Skynet" /jffs/scripts/post-mount 2>/dev/null; then
 						swapmode_status="$(Ylow "[Swap]")"
 					else
@@ -5845,6 +5845,11 @@ case "$1" in
 					echo
 				else
 					Create_Swap
+					if [ "$skynetsf" = "1" ]; then
+						if ! grep -q "vm/swappiness # SkyNet-SF" /jffs/scripts/firewall-start; then
+							echo "echo 0 > /proc/sys/vm/swappiness # SkyNet-SF" >> /jffs/scripts/firewall-start
+						fi
+					fi
 				fi
 			;;
 			*)
