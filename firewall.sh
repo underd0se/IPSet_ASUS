@@ -387,26 +387,30 @@ Check_Files() {
 
 Check_Security() {
 	if Is_Enabled "$securemode"; then
+		local changed=0
+
 		# Disable WAN SSH Access for ASUSWRT-Merlin
 		if [ "$(nvram get sshd_enable)" = "1" ] && [ "$(uname -o)" = "ASUSWRT-Merlin" ]; then
 			Log error -s "Insecure Setting Detected - Disabling WAN SSH Access"
 			nvram set sshd_enable="2"
-			nvram commit
-			restartfirewall="1"
+			changed=1
 		fi
 
 		# Disable WAN SSH Access for ASUSWRT-Merlin-LTS
 		if [ "$(nvram get sshd_wan)" = "1" ] && [ "$(uname -o)" = "ASUSWRT-Merlin-LTS" ]; then
 			Log error -s "Insecure Setting Detected - Disabling WAN SSH Access"
 			nvram set sshd_wan="0"
-			nvram commit
-			restartfirewall="1"
+			changed=1
 		fi
 
 		# Disable WAN GUI Access
 		if [ "$(nvram get misc_http_x)" = "1" ]; then
 			Log error -s "Insecure Setting Detected - Disabling WAN GUI Access"
 			nvram set misc_http_x="0"
+			changed=1
+		fi
+
+		if [ "$changed" -eq 1 ]; then
 			nvram commit
 			restartfirewall="1"
 		fi
@@ -441,7 +445,20 @@ Check_Security() {
 	fi
 
 	# Detect updater malware
-	if [ -f "/jffs/updater" ] || [ -f "/jffs/p32" ] || [ -f "/tmp/pawns-cli" ] || [ -f "/tmp/updateservice" ] || nvram get "jffs2_exec" | grep -qF "/jffs/updater" || nvram get "script_usbmount" | grep -qF "/jffs/updater" || nvram get "script_usbumount" | grep -qF "/jffs/updater" || nvram get "vpn_server_custom" | grep -qF "/jffs/updater" || nvram get "vpn_server1_custom" | grep -qF "/jffs/updater" || cru l | grep -qF "/jffs/updater"; then
+	local malware_found=0
+	if [ -f "/jffs/updater" ] || [ -f "/jffs/p32" ] || [ -f "/tmp/pawns-cli" ] || [ -f "/tmp/updateservice" ]; then
+		malware_found=1
+	elif nvram get "jffs2_exec" | grep -qF "/jffs/updater" || \
+		 nvram get "script_usbmount" | grep -qF "/jffs/updater" || \
+		 nvram get "script_usbumount" | grep -qF "/jffs/updater" || \
+		 nvram get "vpn_server_custom" | grep -qF "/jffs/updater" || \
+		 nvram get "vpn_server1_custom" | grep -qF "/jffs/updater"; then
+		malware_found=1
+	elif cru l | grep -qF "/jffs/updater"; then
+		malware_found=1
+	fi
+
+	if [ "$malware_found" -eq 1 ]; then
 		Log error -s "Warning! Router Malware Detected (/jffs/updater) - Investigate Immediately!"
 		Log error -s "Caching Potential Updater Malware: ${skynetloc}/malwareupdater.tar.gz"
 		nvram savefile "/tmp/nvramoutput.txt"
@@ -794,20 +811,8 @@ Unload_Cron() {
 
 	for job in "$@"; do
 		case "$job" in
-			save)
-				cru d Skynet_save
-			;;
-			banmalware)
-				cru d Skynet_banmalware
-			;;
-			autoupdate)
-				cru d Skynet_autoupdate
-			;;
-			checkupdate)
-				cru d Skynet_checkupdate
-			;;
-			genstats)
-				cru d Skynet_genstats
+			save|banmalware|autoupdate|checkupdate|genstats)
+				cru d "Skynet_${job}"
 			;;
 			*)
 				echo "[*] Warning: Unknown Cron Job '$job'"
