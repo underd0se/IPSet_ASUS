@@ -2360,24 +2360,25 @@ Get_LocalName() {
 Manage_Device() {
 	echo "[i] Looking for available partitions"
 
-	local partitions=()
+	# Build $@ = list of mountpoints whose fs is ext2/3/4, vfat, exfat, ntfs, jffs2 or ubifs
+	set --
 	while read -r _ mnt fs _; do
 		case "$fs" in
 			ext2|ext3|ext4|tfat|exfat)
-				partitions+=("$mnt")
+				set -- "$@" "$mnt"
 				;;
 			jffs2|ubifs)
 				if [ "$mnt" = "/jffs" ]; then
-					partitions+=("$mnt")
+					set -- "$@" "$mnt"
 				fi
 				;;
 		esac
 	done < /proc/mounts
 
 	# If none found, fallback to /jffs
-	if [ ${#partitions[@]} -eq 0 ]; then
+	if [ $# -eq 0 ]; then
 		if [ -d "/jffs" ]; then
-			partitions+=("/jffs")
+			set -- "/jffs"
 		else
 			echo "[*] No compatible USB partitions or /jffs found - exiting!"
 			echo
@@ -2387,7 +2388,7 @@ Manage_Device() {
 
 	# Display numbered list
 	local idx=0
-	for m in "${partitions[@]}"; do
+	for m in "$@"; do
 		idx=$((idx + 1))
 		echo "[$idx] --> $m"
 	done
@@ -2411,7 +2412,14 @@ Manage_Device() {
 			;;
 			*)
 				if [ "$partitionNumber" -ge 1 ] && [ "$partitionNumber" -le "$idx" ]; then
-					device="${partitions[$((partitionNumber - 1))]}"
+					local choice=0
+					for m in "$@"; do
+						choice=$((choice + 1))
+						if [ "$choice" -eq "$partitionNumber" ]; then
+							device="$m"
+							break
+						fi
+					done
 
 					# Test writability
 					if ! touch "$device/rwtest" 2>/dev/null; then
