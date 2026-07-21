@@ -2426,7 +2426,7 @@ Create_Swap() {
 		Show_Menu "Select SWAP File Size:" \
 			"1GB" \
 			"2GB (Recommended)" \
-			"0GB (Zero Swap - Skynet Zero)" \
+			"None (Skynet Zero)" \
 			"Exit"
 		Prompt_Input "1-3" menu
 		case "${menu:?}" in
@@ -2446,6 +2446,12 @@ Create_Swap() {
 					echo "[i] Kernel swappiness dynamically set to 0 (Optimized for Swap-Free mode)"
 					echo
 				fi
+				swaplocation="${device}/myswap.swp"
+				if [ -f "$swaplocation" ]; then
+					swapoff -a 2>/dev/null
+					rm -f "$swaplocation"
+				fi
+				sed -i '\~swapon ~d' /jffs/scripts/post-mount
 				return 0
 			;;
 			e|exit)
@@ -4741,13 +4747,14 @@ case "$1" in
 			ipset save Skynet-BlockedRanges | grep -vE 'comment "BanMalware: ' | sed 's/Skynet-BlockedRanges/Skynet-BlockedRanges-Temp/' | ipset restore -! 2>/dev/null
 		fi
 
-		# 3) Stream feeds sequentially directly into temporary sets
+		# 3) Stream feeds dynamically based on hardware capabilities
 		valid_entries=0
-		while IFS=' ' read -r url list || [ -n "$url" ]; do
-			[ -n "$url" ] || continue
-			echo "[i] Streaming and loading: $list"
-			
-			if curl -fsSL --retry 2 --connect-timeout 5 --max-time 15 "$url" | awk -v src="$list" '
+		mem_total="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null)"
+		
+		# Define stream processor
+		process_stream() {
+			local target_url="$1" target_list="$2"
+			if curl -fsSL --retry 2 --connect-timeout 5 --max-time 15 "$target_url" | awk -v src="$target_list" '
 				{
 					sub("\r$", "", $0)
 					if ($1 ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?([[:space:]]|$)/) {
@@ -4780,9 +4787,25 @@ case "$1" in
 					}
 				}
 			' | ipset restore -! 2>/dev/null; then
-				valid_entries=$((valid_entries + 1))
+				return 0
+			else
+				echo "[✘] Failed: $target_url"
+				return 1
 			fi
+		}
+
+		while IFS=' ' read -r url list || [ -n "$url" ]; do
+			[ -n "$url" ] || continue
+			if Check_Swap || [ "${mem_total:-0}" -ge 500000 ]; then
+				echo "[i] Streaming and loading: $list (Parallel)"
+				process_stream "$url" "$list" &
+			else
+				echo "[i] Streaming and loading: $list"
+				process_stream "$url" "$list"
+			fi
+			valid_entries=$((valid_entries + 1))
 		done < /tmp/skynet/skynet.manifest
+		wait
 
 		# 4) Swap, Cleanup and apply
 		if [ "$valid_entries" -gt 0 ]; then
