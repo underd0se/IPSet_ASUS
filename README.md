@@ -7,6 +7,8 @@ Skynet Zero is an optimized version of the Asuswrt-Merlin firewall script design
 ## Development Changelog
 
 ### v8.1.x (Development Preview)
+- **Dynamic Branch Auto-Updater**: Refactored the core update engine to mathematically isolate codebase branches using a global `skynet_branch` payload. Skynet Zero now flawlessly respects your installed branch natively, permanently preventing cross-pollination and false MD5 upgrade notifications from AMTM.
+- **Extended Fork Versioning Support**: Enhanced the underlying `Filter_Version` regex string parser to seamlessly capture and display extended semantic version fork suffixes (e.g., `-sz.1.0.1-dev`) inside the Skynet UI.
 - **Dynamic Parallel Streaming Architecture**: The script now actively scans your router's hardware capabilities via `/proc/meminfo`. If your router possesses >500MB RAM or an active swap file, the `banmalware` pipeline spins up concurrent background streams to evaluate and crunch blocklists in parallel. Legacy low-RAM hardware gracefully falls back to a synchronous stream.
 - **Zero-Storage Direct Streaming Pipeline**: The `banmalware` engine no longer downloads lists to the USB drive. Feed data is downloaded via `curl`, immediately crunched through an `awk` evaluation array, and streamed directly into an atomic `ipset restore` kernel payload in physical memory.
 - **Advanced `awk` Optimization**: Replaced heavily bottlenecked `while read` loops inside `Check_Security` and `Unban_PrivateIP` with lightning-fast single-pass `awk` arrays to eliminate CPU exhaustion.
